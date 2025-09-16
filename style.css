@@ -107,7 +107,7 @@ body {
 	width: 1300px;
 	height: 730px;
 	z-index: -2;
-	background-image: url("/wp-content/themes/lsf-2025/media/hero-image.jpg");
+	background-image: url("./media/hero-image.jpg");
 	background-size: cover;
 	background-position: bottom;
 }
