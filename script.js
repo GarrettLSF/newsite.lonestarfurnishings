@@ -1,137 +1,191 @@
-// Wait for page to load
-$(document).ready(function() {
-  var cardWidth;
-  var scrollPosition = 0;
-  var totalCards = $(".carousel-item").length;
-  var currentIndex = 0;
-  var isMobile = false;
+document.addEventListener('DOMContentLoaded', () => {
+  const header = document.querySelector('.header');
+  const shrinkHeader = 100;
 
-  // Function to check if we're in mobile view
-  function checkMobile() {
-    isMobile = $(window).width() < 576;
-  }
-
-  // Function to update card width (responsive)
-  function updateCardWidth() {
-    if (!isMobile) {
-      cardWidth = $(".carousel-item").outerWidth(true);
-    }
-  }
-	
-// --- Shrink Header on Scroll ---
-var shrinkHeader = 100;
-$(window).scroll(function() {
-	"use strict";
-	var scroll = $(window).scrollTop(); // Use jQuery's scrollTop
-	if ( scroll >= shrinkHeader ) {
-		$('.header').addClass('scroll');
-	}
-	else {
-		$('.header').removeClass('scroll');
-	}
-});
-
-  // Initialize
-  checkMobile();
-  updateCardWidth();
-
-  // Clone cards for infinite loop (only for desktop)
-  function setupInfiniteLoop() {
-    if (!isMobile) {
-      var $carouselInner = $(".carousel-inner");
-      var originalCards = $carouselInner.html();
-      
-      // Add cloned cards at the end for seamless loop
-      $carouselInner.append(originalCards);
-      
-      // Update total cards count
-      totalCards = $(".carousel-item").length / 2; // Since we doubled them
-    }
-  }
-
-  // Mobile carousel function
-  function handleMobileCarousel(direction) {
-    var $items = $(".carousel-item");
-    var $activeItem = $items.filter(".active");
-    var activeIndex = $items.index($activeItem);
-    var newIndex;
-
-    if (direction === 'next') {
-      newIndex = (activeIndex + 1) % $items.length;
-    } else {
-      newIndex = activeIndex - 1;
-      if (newIndex < 0) newIndex = $items.length - 1;
-    }
-
-    $activeItem.removeClass("active");
-    $items.eq(newIndex).addClass("active");
-  }
-
-  setupInfiniteLoop();
-
-  // Custom next function
-  $(".carousel-control-next").off('click').on("click", function (e) {
-    e.preventDefault();
-    
-    if (isMobile) {
-      handleMobileCarousel('next');
-    } else {
-      updateCardWidth();
-      
-      currentIndex++;
-      scrollPosition = currentIndex * cardWidth;
-      
-      $(".carousel-inner").animate({ scrollLeft: scrollPosition }, 600, function() {
-        // If we've scrolled past the original cards, reset to beginning
-        if (currentIndex >= totalCards) {
-          currentIndex = 0;
-          scrollPosition = 0;
-          $(".carousel-inner").scrollLeft(0);
-        }
-      });
-    }
-  });
-
-  // Custom prev function
-  $(".carousel-control-prev").off('click').on("click", function (e) {
-    e.preventDefault();
-    
-    if (isMobile) {
-      handleMobileCarousel('prev');
-    } else {
-      updateCardWidth();
-      
-      // If at beginning, jump to end of first set
-      if (currentIndex <= 0) {
-        currentIndex = totalCards - 1;
-        scrollPosition = currentIndex * cardWidth;
-        $(".carousel-inner").scrollLeft(scrollPosition);
+  if (header) {
+    const toggleHeader = () => {
+      if (window.scrollY >= shrinkHeader) {
+        header.classList.add('scroll');
       } else {
-        currentIndex--;
-        scrollPosition = currentIndex * cardWidth;
-        $(".carousel-inner").animate({ scrollLeft: scrollPosition }, 600);
+        header.classList.remove('scroll');
       }
+    };
+
+    window.addEventListener('scroll', toggleHeader, { passive: true });
+    toggleHeader();
+  }
+
+  const carousel = document.querySelector('#k12-carousel');
+  if (!carousel) {
+    return;
+  }
+
+  const track = carousel.querySelector('.carousel-inner');
+  const prev = carousel.querySelector('.carousel-control-prev');
+  const next = carousel.querySelector('.carousel-control-next');
+  const pauseBtn = carousel.querySelector('#carouselPause');
+  const originalItems = track ? Array.from(track.children) : [];
+
+  if (!track || !prev || !next || !pauseBtn || originalItems.length === 0) {
+    return;
+  }
+
+  if (originalItems.length <= 1) {
+    pauseBtn.hidden = true;
+    prev.disabled = true;
+    next.disabled = true;
+    prev.setAttribute('aria-disabled', 'true');
+    next.setAttribute('aria-disabled', 'true');
+    return;
+  }
+
+  originalItems.forEach((item) => {
+    const clone = item.cloneNode(true);
+    clone.classList.remove('active');
+    track.appendChild(clone);
+  });
+
+  const total = originalItems.length;
+  let cardWidth = originalItems[0].getBoundingClientRect().width;
+  let index = 0;
+  let autoTimer = null;
+  let isAnimating = false;
+  let isManuallyPaused = false;
+
+  function jumpTo(i) {
+    track.style.scrollBehavior = 'auto';
+    track.scrollLeft = i * cardWidth;
+    // Force layout before restoring smooth scrolling
+    track.getBoundingClientRect();
+    track.style.scrollBehavior = 'smooth';
+  }
+
+  function animateTo(targetIndex) {
+    if (isAnimating) {
+      return;
+    }
+
+    isAnimating = true;
+    track.style.scrollBehavior = 'smooth';
+    track.scrollLeft = targetIndex * cardWidth;
+
+    window.setTimeout(() => {
+      if (targetIndex >= total) {
+        index = 0;
+        jumpTo(index);
+      } else if (targetIndex < 0) {
+        index = total - 1;
+        jumpTo(index);
+      } else {
+        index = targetIndex;
+      }
+
+      isAnimating = false;
+    }, 500);
+  }
+
+  function goNext() {
+    animateTo(index + 1);
+  }
+
+  function goPrev() {
+    if (index === 0) {
+      index = total;
+      jumpTo(index);
+    }
+
+    animateTo(index - 1);
+  }
+
+  function stopAuto() {
+    if (autoTimer) {
+      window.clearInterval(autoTimer);
+      autoTimer = null;
+    }
+  }
+
+  function startAuto() {
+    if (autoTimer || total <= 1) {
+      return;
+    }
+
+    autoTimer = window.setInterval(() => {
+      goNext();
+    }, 3000);
+  }
+
+  function restartAutoIfNeeded() {
+    if (!isManuallyPaused) {
+      startAuto();
+    }
+  }
+
+  function pauseForInteraction() {
+    if (!isManuallyPaused) {
+      stopAuto();
+    }
+  }
+
+  function resumeAfterInteraction() {
+    if (!isManuallyPaused) {
+      startAuto();
+    }
+  }
+
+  next.addEventListener('click', (event) => {
+    event.preventDefault();
+    stopAuto();
+    goNext();
+    restartAutoIfNeeded();
+  });
+
+  prev.addEventListener('click', (event) => {
+    event.preventDefault();
+    stopAuto();
+    goPrev();
+    restartAutoIfNeeded();
+  });
+
+  pauseBtn.addEventListener('click', () => {
+    if (isManuallyPaused) {
+      isManuallyPaused = false;
+      pauseBtn.textContent = 'Pause';
+      pauseBtn.setAttribute('aria-label', 'Pause autoplay');
+      pauseBtn.setAttribute('aria-pressed', 'false');
+      startAuto();
+    } else {
+      isManuallyPaused = true;
+      pauseBtn.textContent = 'Play';
+      pauseBtn.setAttribute('aria-label', 'Start autoplay');
+      pauseBtn.setAttribute('aria-pressed', 'true');
+      stopAuto();
     }
   });
 
-  // Update on window resize
-  $(window).resize(function() {
-    var wasMobile = isMobile;
-    checkMobile();
-    
-    // If we switched between mobile/desktop, reinitialize
-    if (wasMobile !== isMobile) {
-      location.reload(); // Simple solution - reload page
-    } else if (!isMobile) {
-      updateCardWidth();
-      scrollPosition = currentIndex * cardWidth;
-      $(".carousel-inner").scrollLeft(scrollPosition);
+  track.addEventListener('mouseenter', pauseForInteraction);
+  track.addEventListener('mouseleave', resumeAfterInteraction);
+  track.addEventListener('focusin', pauseForInteraction);
+  track.addEventListener('focusout', resumeAfterInteraction);
+  carousel.addEventListener('touchstart', pauseForInteraction, { passive: true });
+  carousel.addEventListener('touchend', resumeAfterInteraction, { passive: true });
+
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) {
+      stopAuto();
+    } else if (!isManuallyPaused) {
+      startAuto();
     }
   });
+
+  window.addEventListener('resize', () => {
+    cardWidth = originalItems[0].getBoundingClientRect().width;
+    jumpTo(index);
+  });
+
+  pauseBtn.textContent = 'Pause';
+  pauseBtn.setAttribute('aria-label', 'Pause autoplay');
+  pauseBtn.setAttribute('aria-pressed', 'false');
+
+  jumpTo(index);
+  startAuto();
 });
-
-setTimeout(function() {
-  setInterval(function() {
-    $(".carousel-control-next").click();
-  }, 3000);
-}, 2000);
